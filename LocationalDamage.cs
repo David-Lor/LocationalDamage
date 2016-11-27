@@ -1,19 +1,20 @@
 ﻿using GTA;
 using GTA.Native;
-using GTA.Math;
 using System;
-using System.Windows.Forms;
 
 public class LocationalDamage : Script
 {
     private ScriptSettings config;
-    bool headshots, debug;
+    private bool headshots, heavyheadshots, debug, clearlastdmg;
+    private const int freq = 200;
     public LocationalDamage()
     {
         Tick += OnTick;
         config = ScriptSettings.Load("scripts\\LocationalDamage.ini");
         headshots = config.GetValue<bool>("OPTIONS", "DeadlyHeadshots", false);
+        heavyheadshots = config.GetValue<bool>("OPTIONS", "HeavyDamageHeadshots", false);
         debug = config.GetValue<bool>("OPTIONS", "Debug", false);
+        clearlastdmg = config.GetValue<bool>("OPTIONS", "ClearLastDamaged", false);
     }
 
     void OnTick(object sender, EventArgs e)
@@ -22,19 +23,21 @@ public class LocationalDamage : Script
         int health = player.Health;
         int armor = player.Armor;
 
+        if (headshots || heavyheadshots) { GTA.Native.Function.Call(GTA.Native.Hash.SET_PED_SUFFERS_CRITICAL_HITS, player, true); }
+
         bool ishealthreduced = false;
         bool isarmorreduced = false;
 
-        Wait(200);
+        Wait(freq);
         if (health > player.Health && !GTA.Native.Function.Call<bool>(GTA.Native.Hash.HAS_PED_BEEN_DAMAGED_BY_WEAPON, player, 0, 1))
         {
             ishealthreduced = true;
-            //GTA.Native.Function.Call(GTA.Native.Hash.CLEAR_PED_LAST_WEAPON_DAMAGE, player);
+            if (clearlastdmg) { GTA.Native.Function.Call(GTA.Native.Hash.CLEAR_PED_LAST_WEAPON_DAMAGE, player); }
         }
         if (armor > player.Armor && !GTA.Native.Function.Call<bool>(GTA.Native.Hash.HAS_PED_BEEN_DAMAGED_BY_WEAPON, player, 0, 1))
         {
             isarmorreduced = true;
-            //GTA.Native.Function.Call(GTA.Native.Hash.CLEAR_PED_LAST_WEAPON_DAMAGE, player);
+            if (clearlastdmg) { GTA.Native.Function.Call(GTA.Native.Hash.CLEAR_PED_LAST_WEAPON_DAMAGE, player); }
         }
 
         int bone;
@@ -345,12 +348,12 @@ public class LocationalDamage : Script
             if (ishealthreduced || isarmorreduced) { //headshot
                 if (debug) { UI.ShowSubtitle("Damaged bone:" + bonestr + " | Part: " + parte + " | ID=" + bone.ToString()); }
                 if (headshots && parte == "head") {
-                    //player.Health = 0;
+                    player.Health = 0;
                     player.Kill();
                 }
             }
 
-            if (isarmorreduced && parte != "body" && !player.IsDead) { //get shot on non-body part with armor
+            if (isarmorreduced && parte != "body" && !player.IsDead && (!headshots || (headshots && parte != "head") )) { //get shot on non-body part with armor
                 int dmg = armor - player.Armor;
                 player.Armor = armor;
                 player.Health = player.Health - dmg;
